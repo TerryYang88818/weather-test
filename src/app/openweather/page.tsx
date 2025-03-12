@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import WeatherLoading from '../components/WeatherLoading';
 
@@ -44,8 +44,8 @@ export default function OpenWeatherPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [currentTime, setCurrentTime] = useState<string>('');
 
-  // 热门城市建议 - 添加中文名称
-  const popularCities = [
+  // 热门城市建议 - 使用useMemo包装，避免在每次渲染时重新创建
+  const popularCities = useMemo(() => [
     { name: '伦敦', value: 'london' },
     { name: '纽约', value: 'new york' },
     { name: '东京', value: 'tokyo' },
@@ -56,7 +56,7 @@ export default function OpenWeatherPage() {
     { name: '莫斯科', value: 'moscow' },
     { name: '悉尼', value: 'sydney' },
     { name: '新加坡', value: 'singapore' }
-  ];
+  ], []);
 
   // 更新当前时间
   useEffect(() => {

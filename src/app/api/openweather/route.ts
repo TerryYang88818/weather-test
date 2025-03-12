@@ -3,12 +3,6 @@ import { NextResponse } from 'next/server';
 // 确保这里已替换为有效的API密钥
 const FALLBACK_API_KEY = '18971d2744ddae8df23ba9606bb1a327'; 
 
-// 定义错误类型
-interface FetchError extends Error {
-  name: string;
-  message: string;
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const city = searchParams.get('city') || 'london'; // 使用一个确定存在的城市作为默认值
