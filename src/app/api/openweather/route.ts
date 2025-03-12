@@ -4,6 +4,13 @@ import { NextResponse } from 'next/server';
 const FALLBACK_API_KEY = '18971d2744ddae8df23ba9606bb1a327'; 
 
 export async function GET(request: Request) {
+  // 添加缓存控制头
+  const headers = {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  };
+
   const { searchParams } = new URL(request.url);
   const city = searchParams.get('city') || 'london'; // 使用一个确定存在的城市作为默认值
 
@@ -110,8 +117,10 @@ export async function GET(request: Request) {
       console.log(`将城市名 "${city}" 转换为 "${cityMapping[city]}"`);
     }
     
+    // 添加时间戳避免缓存
+    const timestamp = new Date().getTime();
     // 使用备用API密钥
-    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodedCity}&appid=${apiKey}&lang=zh_cn&units=metric`;
+    const apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${encodedCity}&appid=${apiKey}&lang=zh_cn&units=metric&_=${timestamp}`;
     
     console.log('发送请求到:', apiUrl.replace(apiKey, '[API_KEY]'));
     
@@ -125,7 +134,10 @@ export async function GET(request: Request) {
         signal: controller.signal,
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       });
       
@@ -142,7 +154,7 @@ export async function GET(request: Request) {
               error: `找不到城市 "${city}"`, 
               details: "请尝试使用英文城市名，如 'beijing' 而不是 '北京'"
             },
-            { status: 404 }
+            { status: 404, headers }
           );
         }
         
@@ -153,13 +165,13 @@ export async function GET(request: Request) {
               error: "API密钥无效或未激活", 
               details: "请检查您的OpenWeatherMap API密钥是否正确，新API密钥可能需要几小时才能激活"
             },
-            { status: 401 }
+            { status: 401, headers }
           );
         }
         
         return NextResponse.json(
           { error: `OpenWeatherMap API错误: ${response.status}`, details: errorText },
-          { status: response.status }
+          { status: response.status, headers }
         );
       }
 
@@ -188,12 +200,12 @@ export async function GET(request: Request) {
       };
       
       console.log('API返回数据:', enhancedData);
-      return NextResponse.json(enhancedData);
+      return NextResponse.json(enhancedData, { headers });
     } catch (fetchError: unknown) {
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
         return NextResponse.json(
           { error: '请求超时', details: '服务器响应时间过长，请稍后再试' },
-          { status: 408 }
+          { status: 408, headers }
         );
       }
       throw fetchError; // 重新抛出其他fetch错误
@@ -213,7 +225,7 @@ export async function GET(request: Request) {
     
     return NextResponse.json(
       { error: errorMessage, details: errorDetails },
-      { status: 500 }
+      { status: 500, headers }
     );
   }
 } 

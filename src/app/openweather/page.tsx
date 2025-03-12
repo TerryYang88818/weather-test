@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import Image from 'next/image';
-import WeatherLoading from '../components/WeatherLoading';
+import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import styles from './page.module.css';
 
 interface WeatherData {
   name: string;
@@ -24,288 +24,232 @@ interface WeatherData {
   sys: {
     country: string;
   };
+  visibility: number;
   dt: number;
   timezone: number;
   formatted_time: string;
   local_time: string;
 }
 
-interface ErrorResponse {
-  error: string;
-  details?: string;
-}
-
 export default function OpenWeatherPage() {
-  const [city, setCity] = useState('london'); // 默认使用伦敦
-  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ErrorResponse | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const router = useRouter();
+  const [city, setCity] = useState('');
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [currentTime, setCurrentTime] = useState<string>('');
+  const [lastSearchedCity, setLastSearchedCity] = useState<string | null>(null);
 
-  // 热门城市建议 - 使用useMemo包装，避免在每次渲染时重新创建
+  // 使用useMemo缓存热门城市列表，避免每次渲染重新创建
   const popularCities = useMemo(() => [
-    { name: '伦敦', value: 'london' },
-    { name: '纽约', value: 'new york' },
-    { name: '东京', value: 'tokyo' },
-    { name: '北京', value: 'beijing' },
-    { name: '上海', value: 'shanghai' },
-    { name: '巴黎', value: 'paris' },
-    { name: '柏林', value: 'berlin' },
-    { name: '莫斯科', value: 'moscow' },
-    { name: '悉尼', value: 'sydney' },
-    { name: '新加坡', value: 'singapore' }
+    '北京', '上海', '广州', '深圳', '香港', 
+    '纽约', '伦敦', '东京', '巴黎', '悉尼'
   ], []);
 
-  // 更新当前时间
+  // 初始加载效果
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }));
-    }, 1000);
+    // 延迟一小段时间后关闭初始加载状态
+    const timer = setTimeout(() => {
+      setInitialLoad(false);
+    }, 1500);
 
-    return () => clearInterval(timer);
+    return () => clearTimeout(timer);
   }, []);
 
-  const fetchWeather = useCallback(async (cityName: string, isRetry = false) => {
+  const fetchWeather = async (searchCity: string, isRetry = false) => {
+    if (!searchCity.trim()) {
+      setError('请输入城市名');
+      setErrorDetails('城市名不能为空');
+      setLoading(false);
+      setInitialLoad(false);
+      return;
+    }
+
     try {
-      if (!isRetry) {
-        setLoading(true);
-      }
+      setLoading(true);
       setError(null);
+      setErrorDetails(null);
       
-      // 添加随机参数避免缓存
+      if (!isRetry) {
+        setLastSearchedCity(searchCity);
+      }
+
+      // 添加时间戳避免缓存
       const timestamp = new Date().getTime();
-      const response = await fetch(`/api/openweather?city=${encodeURIComponent(cityName)}&_=${timestamp}`);
-      
-      const data = await response.json();
-      
-      if (data.error) {
-        setError({
-          error: data.error,
-          details: data.details
-        });
-        setWeatherData(null);
-      } else {
-        setWeatherData(data);
-        // 成功获取数据后，将这个城市添加到建议列表的前面
-        const cityToAdd = popularCities.find(c => c.value.toLowerCase() === cityName.toLowerCase())?.name || cityName;
-        if (!suggestions.includes(cityToAdd)) {
-          setSuggestions(prev => [cityToAdd, ...prev].slice(0, 5));
+      const response = await fetch(`/api/openweather?city=${encodeURIComponent(searchCity)}&_=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
-        // 重置重试计数
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || '获取天气数据失败');
+        setErrorDetails(errorData.details || `HTTP错误: ${response.status}`);
+        setWeather(null);
+      } else {
+        const data = await response.json();
+        setWeather(data);
+        // 成功获取数据后重置重试计数
         setRetryCount(0);
       }
     } catch (err) {
-      console.error('获取天气数据错误:', err);
-      setError({
-        error: '获取天气数据失败',
-        details: err instanceof Error ? err.message : '未知错误'
-      });
-      setWeatherData(null);
+      console.error('获取天气数据时出错:', err);
+      setError('获取天气数据失败');
+      setErrorDetails(err instanceof Error ? err.message : '未知错误');
+      setWeather(null);
     } finally {
       setLoading(false);
-    }
-  }, [popularCities, suggestions]);
-
-  // 自动重试功能
-  const handleRetry = () => {
-    if (retryCount < 3) {
-      setRetryCount(prev => prev + 1);
-      fetchWeather(city, true);
+      setInitialLoad(false);
     }
   };
-
-  useEffect(() => {
-    fetchWeather(city);
-    // 初始化建议列表
-    setSuggestions(popularCities.slice(0, 5).map(c => c.name));
-  }, [city, fetchWeather, popularCities]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (city.trim()) {
-      // 重置重试计数
-      setRetryCount(0);
-      fetchWeather(city.trim());
+    fetchWeather(city);
+  };
+
+  const handleRetry = () => {
+    if (retryCount < 3 && lastSearchedCity) {
+      setRetryCount(prev => prev + 1);
+      fetchWeather(lastSearchedCity, true);
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    // 查找对应的英文值
-    const cityObj = popularCities.find(c => c.name === suggestion);
-    const cityValue = cityObj ? cityObj.value : suggestion;
-    
-    setCity(cityValue);
-    // 重置重试计数
-    setRetryCount(0);
-    fetchWeather(cityValue);
+  const handlePopularCityClick = (popularCity: string) => {
+    setCity(popularCity);
+    fetchWeather(popularCity);
   };
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-100 dark:bg-gray-900">
-      <header className="mb-8 text-center">
-        <h1 className="text-3xl md:text-4xl font-bold mb-2 text-gray-900 dark:text-white">
-          OpenWeatherMap 天气查询
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 max-w-lg">
-          查询世界各地的实时天气状况
-        </p>
-        <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-          当前时间: {currentTime}
-        </p>
-      </header>
-
-      <form onSubmit={handleSubmit} className="w-full max-w-md mb-6">
-        <div className="flex flex-col">
-          <div className="flex items-center">
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="输入城市名称（支持中文或英文）"
-              className="flex-1 p-3 rounded-l-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              className="p-3 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              disabled={loading || !city.trim()}
-            >
-              {loading ? '查询中...' : '查询'}
-            </button>
-          </div>
-          
-          {/* 城市建议 */}
-          <div className="mt-2 flex flex-wrap gap-2">
-            {suggestions.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onClick={() => handleSuggestionClick(suggestion)}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
-                disabled={loading}
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
+  // 显示初始加载状态
+  if (initialLoad) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loadingContainer}>
+          <div className={styles.spinner}></div>
+          <p>正在加载天气应用...</p>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.container}>
+      <h1 className={styles.title}>天气查询</h1>
+      
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <input
+          type="text"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          placeholder="输入城市名称 (如: 北京, london)"
+          className={styles.input}
+          disabled={loading}
+        />
+        <button 
+          type="submit" 
+          className={styles.button}
+          disabled={loading}
+        >
+          {loading ? '加载中...' : '查询'}
+        </button>
       </form>
 
-      <main className="w-full max-w-2xl">
-        {loading ? (
-          <WeatherLoading />
-        ) : error ? (
-          <div className="p-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-lg font-medium text-red-800 dark:text-red-300">错误</h3>
-                <div className="mt-2 text-red-700 dark:text-red-200">
-                  <p>{error.error}</p>
-                  {error.details && (
-                    <p className="mt-1 text-sm">{error.details}</p>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <p className="text-sm text-red-700 dark:text-red-200 mb-3">
-                    提示：支持中文城市名，如 &quot;北京&quot;、&quot;上海&quot;、&quot;广州&quot; 等
-                  </p>
-                  <button
-                    onClick={handleRetry}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                    disabled={loading || retryCount >= 3}
-                  >
-                    {retryCount > 0 ? `重试 (${retryCount}/3)` : '重试'}
-                  </button>
-                </div>
-              </div>
+      <div className={styles.popularCities}>
+        <h3>热门城市:</h3>
+        <div className={styles.cityButtons}>
+          {popularCities.map((popularCity) => (
+            <button
+              key={popularCity}
+              onClick={() => handlePopularCityClick(popularCity)}
+              className={styles.cityButton}
+              disabled={loading}
+            >
+              {popularCity}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && (
+        <div className={styles.loadingContainer}>
+          <div className={styles.spinner}></div>
+          <p>正在获取天气数据...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className={styles.error}>
+          <h3>错误: {error}</h3>
+          {errorDetails && <p>{errorDetails}</p>}
+          {lastSearchedCity && retryCount < 3 && (
+            <div className={styles.retryContainer}>
+              <button 
+                onClick={handleRetry} 
+                className={styles.retryButton}
+                disabled={loading}
+              >
+                重试 ({retryCount}/3)
+              </button>
+              <p className={styles.retryHint}>
+                {retryCount === 0 
+                  ? '首次尝试失败' 
+                  : retryCount === 1 
+                    ? '第二次尝试' 
+                    : '最后一次尝试'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {weather && (
+        <div className={styles.weatherCard}>
+          <h2>{weather.name} ({weather.sys.country})</h2>
+          <div className={styles.weatherMain}>
+            <img 
+              src={`https://openweathermap.org/img/wn/${weather.weather[0].icon}@2x.png`} 
+              alt={weather.weather[0].description}
+              className={styles.weatherIcon}
+            />
+            <div className={styles.temperature}>
+              <span className={styles.tempValue}>{Math.round(weather.main.temp)}°C</span>
+              <span className={styles.tempFeelsLike}>体感温度: {Math.round(weather.main.feels_like)}°C</span>
             </div>
           </div>
-        ) : weatherData ? (
-          <div className="overflow-hidden rounded-xl bg-white dark:bg-gray-800 shadow-lg">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold">
-                    {weatherData.name}, {weatherData.sys.country}
-                  </h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                    当地时间: {weatherData.formatted_time}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-center">
-                    {weatherData.weather[0].icon && (
-                      <div className="mr-2">
-                        <Image
-                          src={`https://openweathermap.org/img/wn/${weatherData.weather[0].icon}@2x.png`}
-                          alt={weatherData.weather[0].description}
-                          width={50}
-                          height={50}
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-4xl font-bold">{Math.round(weatherData.main.temp)}°C</p>
-                      <p className="text-gray-500 dark:text-gray-400">{weatherData.weather[0].description}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center">
-                  <span className="text-xl mr-2">🌡️</span>
-                  <div>
-                    <p className="font-medium">体感温度</p>
-                    <p className="text-gray-600 dark:text-gray-400">{Math.round(weatherData.main.feels_like)}°C</p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-xl mr-2">💨</span>
-                  <div>
-                    <p className="font-medium">风速</p>
-                    <p className="text-gray-600 dark:text-gray-400">{weatherData.wind.speed} 米/秒</p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-xl mr-2">💧</span>
-                  <div>
-                    <p className="font-medium">湿度</p>
-                    <p className="text-gray-600 dark:text-gray-400">{weatherData.main.humidity}%</p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-xl mr-2">🔽</span>
-                  <div>
-                    <p className="font-medium">气压</p>
-                    <p className="text-gray-600 dark:text-gray-400">{weatherData.main.pressure} hPa</p>
-                  </div>
-                </div>
-              </div>
+          <p className={styles.weatherDescription}>{weather.weather[0].description}</p>
+          
+          <div className={styles.weatherDetails}>
+            <div className={styles.detailItem}>
+              <span className={styles.detailLabel}>湿度:</span>
+              <span className={styles.detailValue}>{weather.main.humidity}%</span>
+            </div>
+            <div className={styles.detailItem}>
+              <span className={styles.detailLabel}>气压:</span>
+              <span className={styles.detailValue}>{weather.main.pressure} hPa</span>
+            </div>
+            <div className={styles.detailItem}>
+              <span className={styles.detailLabel}>风速:</span>
+              <span className={styles.detailValue}>{weather.wind.speed} m/s</span>
+            </div>
+            <div className={styles.detailItem}>
+              <span className={styles.detailLabel}>能见度:</span>
+              <span className={styles.detailValue}>{(weather.visibility / 1000).toFixed(1)} km</span>
             </div>
           </div>
-        ) : null}
-      </main>
-      
-      <footer className="mt-12 text-sm text-gray-500 dark:text-gray-400 text-center">
-        <p>数据由 <a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500">OpenWeatherMap</a> 提供</p>
-      </footer>
+          
+          {weather.formatted_time && (
+            <div className={styles.timeInfo}>
+              <p>当地时间: {weather.formatted_time}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 } 
