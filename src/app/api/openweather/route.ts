@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server';
 // 确保这里已替换为有效的API密钥
 const FALLBACK_API_KEY = '18971d2744ddae8df23ba9606bb1a327'; 
 
+// 定义错误类型
+interface FetchError extends Error {
+  name: string;
+  message: string;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const city = searchParams.get('city') || 'london'; // 使用一个确定存在的城市作为默认值
@@ -189,8 +195,8 @@ export async function GET(request: Request) {
       
       console.log('API返回数据:', enhancedData);
       return NextResponse.json(enhancedData);
-    } catch (fetchError: any) {
-      if (fetchError.name === 'AbortError') {
+    } catch (fetchError: unknown) {
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
         return NextResponse.json(
           { error: '请求超时', details: '服务器响应时间过长，请稍后再试' },
           { status: 408 }
@@ -198,7 +204,7 @@ export async function GET(request: Request) {
       }
       throw fetchError; // 重新抛出其他fetch错误
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('获取天气数据失败:', error);
     
     // 提供更详细的错误信息

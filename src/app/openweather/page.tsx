@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import WeatherLoading from '../components/WeatherLoading';
 
@@ -76,7 +76,7 @@ export default function OpenWeatherPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const fetchWeather = async (cityName: string, isRetry = false) => {
+  const fetchWeather = useCallback(async (cityName: string, isRetry = false) => {
     try {
       if (!isRetry) {
         setLoading(true);
@@ -115,7 +115,7 @@ export default function OpenWeatherPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [popularCities, suggestions]);
 
   // 自动重试功能
   const handleRetry = () => {
@@ -129,7 +129,7 @@ export default function OpenWeatherPage() {
     fetchWeather(city);
     // 初始化建议列表
     setSuggestions(popularCities.slice(0, 5).map(c => c.name));
-  }, []);
+  }, [city, fetchWeather, popularCities]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,7 +223,7 @@ export default function OpenWeatherPage() {
                 </div>
                 <div className="mt-4">
                   <p className="text-sm text-red-700 dark:text-red-200 mb-3">
-                    提示：支持中文城市名，如 "北京"、"上海"、"广州" 等
+                    提示：支持中文城市名，如 &quot;北京&quot;、&quot;上海&quot;、&quot;广州&quot; 等
                   </p>
                   <button
                     onClick={handleRetry}
