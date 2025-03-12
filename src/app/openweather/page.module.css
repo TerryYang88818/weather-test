@@ -146,6 +146,30 @@
   font-size: 0.9rem;
 }
 
+.apiLimitInfo {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 4px;
+  color: #856404;
+}
+
+.apiLimitInfo ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.apiLimitInfo li {
+  margin-bottom: 0.25rem;
+}
+
+.apiLimitNote {
+  font-size: 0.8rem;
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
 .retryContainer {
   margin-top: 1rem;
   display: flex;

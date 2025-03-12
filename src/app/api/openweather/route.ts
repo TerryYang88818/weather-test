@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-// 确保这里已替换为有效的API密钥
-const FALLBACK_API_KEY = '18971d2744ddae8df23ba9606bb1a327'; 
+// 使用备用API密钥（这是一个示例密钥，实际使用时应替换为有效的密钥）
+const FALLBACK_API_KEY = 'f5cb0b965ea1564c50c6f1b74534d823'; 
 
 export async function GET(request: Request) {
   // 添加缓存控制头
@@ -166,6 +166,17 @@ export async function GET(request: Request) {
               details: "请检查您的OpenWeatherMap API密钥是否正确，新API密钥可能需要几小时才能激活"
             },
             { status: 401, headers }
+          );
+        }
+        
+        // 如果是429错误，表示请求过多
+        if (response.status === 429) {
+          return NextResponse.json(
+            { 
+              error: "API请求次数超限", 
+              details: "您的OpenWeatherMap免费账户已达到请求限制。请等待一段时间后再试，或者升级到付费计划。"
+            },
+            { status: 429, headers }
           );
         }
         

@@ -75,6 +75,10 @@ export default function OpenWeatherPage() {
         setLastSearchedCity(searchCity);
       }
 
+      // 添加随机延迟，避免频繁请求API
+      const delay = Math.floor(Math.random() * 1000) + 500; // 500-1500ms的随机延迟
+      await new Promise(resolve => setTimeout(resolve, delay));
+
       // 添加时间戳避免缓存
       const timestamp = new Date().getTime();
       const response = await fetch(`/api/openweather?city=${encodeURIComponent(searchCity)}&_=${timestamp}`, {
@@ -186,12 +190,28 @@ export default function OpenWeatherPage() {
         <div className={styles.error}>
           <h3>错误: {error}</h3>
           {errorDetails && <p>{errorDetails}</p>}
+          
+          {/* 为API限流错误添加特殊提示 */}
+          {error === "API请求次数超限" && (
+            <div className={styles.apiLimitInfo}>
+              <p>解决方法:</p>
+              <ol>
+                <li>等待几小时后再试</li>
+                <li>使用新的API密钥</li>
+                <li>升级到OpenWeatherMap付费计划</li>
+              </ol>
+              <p className={styles.apiLimitNote}>
+                免费API密钥限制为每分钟60次调用，每天1,000次调用
+              </p>
+            </div>
+          )}
+          
           {lastSearchedCity && retryCount < 3 && (
             <div className={styles.retryContainer}>
               <button 
                 onClick={handleRetry} 
                 className={styles.retryButton}
-                disabled={loading}
+                disabled={loading || error === "API请求次数超限"}
               >
                 重试 ({retryCount}/3)
               </button>
