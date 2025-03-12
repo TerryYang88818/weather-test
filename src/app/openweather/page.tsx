@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import styles from './page.module.css';
 
 interface WeatherData {
@@ -32,7 +32,6 @@ interface WeatherData {
 }
 
 export default function OpenWeatherPage() {
-  const router = useRouter();
   const [city, setCity] = useState('');
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,10 +211,13 @@ export default function OpenWeatherPage() {
         <div className={styles.weatherCard}>
           <h2>{weather.name} ({weather.sys.country})</h2>
           <div className={styles.weatherMain}>
-            <img 
+            <Image 
               src={`https://openweathermap.org/img/wn/${weather.weather[0].icon}@2x.png`} 
               alt={weather.weather[0].description}
               className={styles.weatherIcon}
+              width={80}
+              height={80}
+              unoptimized
             />
             <div className={styles.temperature}>
               <span className={styles.tempValue}>{Math.round(weather.main.temp)}°C</span>
