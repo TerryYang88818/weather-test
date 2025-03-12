@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 // 使用备用API密钥（这是一个示例密钥，实际使用时应替换为有效的密钥）
-const FALLBACK_API_KEY = 'f5cb0b965ea1564c50c6f1b74534d823'; 
+const FALLBACK_API_KEY = '24efc8e20afefd5d24dc2151cbe01dab'; 
 
 export async function GET(request: Request) {
   // 添加缓存控制头
@@ -209,6 +209,14 @@ export async function GET(request: Request) {
         formatted_time: formattedTime,
         local_time: localTime.toISOString()
       };
+      
+      // 确保日出日落时间存在
+      if (!enhancedData.sys.sunrise) {
+        enhancedData.sys.sunrise = Math.floor(Date.now() / 1000) - 3600; // 默认为一小时前
+      }
+      if (!enhancedData.sys.sunset) {
+        enhancedData.sys.sunset = Math.floor(Date.now() / 1000) + 3600; // 默认为一小时后
+      }
       
       console.log('API返回数据:', enhancedData);
       return NextResponse.json(enhancedData, { headers });
